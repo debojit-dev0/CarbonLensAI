@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-0: #05080a;
+  --bg-1: #0a1012;
+  --bg-2: #0e1618;
+  --primary: #39ffa0;
+  --secondary: #34d0ff;
+  --warning: #ffb454;
+  --text-0: #f2f7f5;
+  --text-1: #aebbc0;
+  --text-2: #6d7c79;
+}
+
+html,
+body {
+  background: var(--bg-0);
+  color: var(--text-0);
+}
+
+body {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 36px 36px;
+  background-position: center;
+}
+
+.glass-panel {
+  background: linear-gradient(180deg, rgba(14, 22, 24, 0.72), rgba(10, 16, 18, 0.72));
+  border: 1px solid rgba(174, 187, 192, 0.12);
+  backdrop-filter: blur(10px);
+}
+
+.glass-panel:hover {
+  border-color: rgba(57, 255, 160, 0.28);
+}
+
+.text-glow {
+  text-shadow: 0 0 18px rgba(57, 255, 160, 0.35);
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(174, 187, 192, 0.2);
+  border-radius: 3px;
+}
+
+@keyframes typingDot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+.typing-dot {
+  animation: typingDot 1.2s ease-in-out infinite;
+}
