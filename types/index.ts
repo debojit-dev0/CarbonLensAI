@@ -55,6 +55,26 @@ export interface SCIResult {
   sciPerUnit: number; // (E x I + M) / R
 }
 
+export interface MacAdvisorRow {
+  region: Region;
+  window: string;
+  intensity: number;
+  impactKg: number;
+  costUsd: number;
+  costDeltaUsd: number; // vs. workload's CURRENT region+impact — negative = money saved, positive = money spent
+  carbonDeltaKg: number; // vs. current — positive = carbon reduced
+  macUsdPerTonne: number | null; // vs. the coal (dirtiest) baseline
+  verdict: "current" | "cheaper_and_cleaner" | "worth_it" | "marginal" | "not_worth_it" | "no_change";
+}
+
+export interface MacAdvisorResult {
+  workloadId: string;
+  currentRegion: Region;
+  coalBaselineRegion: Region;
+  carbonPricePerTonne: number;
+  rows: MacAdvisorRow[];
+}
+
 export interface OptimizationRecommendation {
   workloadId: string;
   currentRegion: Region;

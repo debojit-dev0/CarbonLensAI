@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { Check, Loader2, Sparkles } from "lucide-react";
 import PageHeader from "@/components/layout/PageHeader";
-import { OptimizationRecommendation, Workload } from "@/types";
+import MacAdvisorPanel from "@/components/optimization/MacAdvisorPanel";
+import { MacAdvisorResult, OptimizationRecommendation, Workload } from "@/types";
 
 const STEPS = [
   "ANALYZING WORKLOAD",
@@ -23,6 +24,7 @@ export default function OptimizationPage() {
   const [stepIndex, setStepIndex] = useState(-1);
   const [applied, setApplied] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [macResult, setMacResult] = useState<MacAdvisorResult | null>(null);
 
   useEffect(() => {
     fetch("/api/workloads")
@@ -35,6 +37,18 @@ export default function OptimizationPage() {
   }, []);
 
   const workload = useMemo(() => workloads.find((w) => w.id === selectedId) ?? null, [workloads, selectedId]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    setMacResult(null);
+    fetch("/api/optimization/mac-advisor", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workloadId: selectedId }),
+    })
+      .then((r) => r.json())
+      .then((d) => setMacResult(d.rows ? d : null));
+  }, [selectedId]);
 
   const runAnalysis = async () => {
     if (!workload) return;
@@ -223,6 +237,13 @@ export default function OptimizationPage() {
             </div>
           </div>
         )}
+
+        <div>
+          <div className="font-mono text-[10px] tracking-[0.16em] text-text-2 mb-3">
+            MAC ADVISOR — SHOULD YOU SWITCH?
+          </div>
+          <MacAdvisorPanel result={macResult} />
+        </div>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { OptimizationRecommendation, Workload, RegionIntensity } from "@/types";
+import { OptimizationRecommendation, Workload, RegionIntensity, MacAdvisorResult, MacAdvisorRow } from "@/types";
 import {
   calculateCarbonImpact,
   calculateSCI,
@@ -141,4 +141,94 @@ export function compareRegionsAtHour(workload: Workload, hour: number): RegionAt
     );
     return { region: region.region, intensity, impactKg: impact.carbonKg, costUsd };
   }).sort((a, b) => a.costUsd - b.costUsd);
+}
+
+/**
+ * MAC Advisor: for every region, predicts what scheduling this workload
+ * there would actually cost or save in dollars, and what it costs per
+ * tonne of CO2 abated (MAC) relative to the coal (dirtiest) baseline —
+ * then verdicts whether the switch is worth making on economics alone.
+ *
+ * Decision rule, using the shadow carbon price as the "is it worth it"
+ * line — the same number the total-cost formula already prices carbon
+ * at, so the verdict and the cost figures never disagree with each other:
+ *
+ *   MAC < 0                          → cheaper AND cleaner — free win, always do it
+ *   0 <= MAC <= carbon price         → worth it — abating here costs less than
+ *                                       what you're already pricing carbon at
+ *   carbon price < MAC <= 2x price   → marginal — a real call, not a clear win
+ *   MAC > 2x carbon price            → not worth it — abatement here is expensive
+ *   region === coal baseline itself  → no_change (nothing to compare against)
+ */
+export function evaluateMacAdvisor(workload: Workload): MacAdvisorResult {
+  const runtimeHours = secondsToHours(workload.runtimeSeconds);
+  const energyKwh = workload.power * runtimeHours * 1.1;
+  const coal = coalBaselineRegion();
+
+  const currentRegionData = getRegion(workload.region);
+  const currentImpact = calculateCarbonImpact(workload.power, runtimeHours, currentRegionData.gPerKwh, 1.1);
+  const currentCostUsd = calculateTotalCost(
+    energyKwh,
+    currentRegionData.electricityPricePerKwh,
+    currentImpact.carbonKg,
+    PRICE_OF_CARBON_USD_PER_TONNE
+  );
+
+  const rows: MacAdvisorRow[] = REGIONS.map((region) => {
+    const isCurrent = region.region === workload.region;
+    const isCoalBaseline = region.region === coal.region;
+
+    // The current region's row must reflect the workload's ACTUAL running
+    // point (its flat/current intensity) — not that region's best window,
+    // which is a hypothetical future slot, not where it's running now.
+    // Every other row IS the best-window hypothetical for that region.
+    const intensity = isCurrent ? currentRegionData.gPerKwh : bestWindow(region).value;
+    const window = isCurrent ? "now" : bestWindow(region).window;
+    const impact = isCurrent ? currentImpact : calculateCarbonImpact(workload.power, runtimeHours, intensity, 1.1);
+    const costUsd = isCurrent
+      ? currentCostUsd
+      : calculateTotalCost(energyKwh, region.electricityPricePerKwh, impact.carbonKg, PRICE_OF_CARBON_USD_PER_TONNE);
+
+    const costDeltaUsd = isCurrent ? 0 : round(costUsd - currentCostUsd, 4);
+    const carbonDeltaKg = isCurrent ? 0 : round(currentImpact.carbonKg - impact.carbonKg, 3);
+
+    const macUsdPerTonne = isCoalBaseline
+      ? null
+      : calculateMAC(region.electricityPricePerKwh, coal.electricityPricePerKwh, intensity, coal.gPerKwh);
+
+    let verdict: MacAdvisorRow["verdict"];
+    if (isCurrent) {
+      verdict = "current";
+    } else if (macUsdPerTonne === null) {
+      verdict = "no_change";
+    } else if (macUsdPerTonne < 0) {
+      verdict = "cheaper_and_cleaner";
+    } else if (macUsdPerTonne <= PRICE_OF_CARBON_USD_PER_TONNE) {
+      verdict = "worth_it";
+    } else if (macUsdPerTonne <= PRICE_OF_CARBON_USD_PER_TONNE * 2) {
+      verdict = "marginal";
+    } else {
+      verdict = "not_worth_it";
+    }
+
+    return {
+      region: region.region,
+      window,
+      intensity,
+      impactKg: impact.carbonKg,
+      costUsd,
+      costDeltaUsd,
+      carbonDeltaKg,
+      macUsdPerTonne,
+      verdict,
+    };
+  });
+
+  return {
+    workloadId: workload.id,
+    currentRegion: workload.region,
+    coalBaselineRegion: coal.region,
+    carbonPricePerTonne: PRICE_OF_CARBON_USD_PER_TONNE,
+    rows,
+  };
 }
